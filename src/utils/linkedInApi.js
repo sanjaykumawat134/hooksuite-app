@@ -1,4 +1,5 @@
 const axios = require("axios").default;
+const fs = require("fs");
 const {
   clientId,
   clientSecret,
@@ -77,30 +78,117 @@ const getLinkedinProfile = async (req) => {
   };
   return userObj;
 };
-
-// const getLinkedinEmail = async (req) => {
-//   const token = req.access_token;
-//   if (!token) {
-//     console.log("no token was attached to request");
-//     return;
-//   }
-//   const params = {
-//     oauth2_access_token: token,
-//   };
-
-//   return emailAddress;
-// };
-// const getLinkedinUserImage = async () => {
-//   const token = req.access_token;
-//   if (!token) {
-//     console.log("no token was attached to request");
-//     return;
-//   }
-// };
 //req or token (store token to session)
-const publishContent = (req, linkedInId, content) => {};
+//req will have access token , and content to publish on linkedin
+const publishContent = async (access_token, linkedinId, imagePath, text) => {
+  const data = {
+    registerUploadRequest: {
+      recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+      owner: `urn:li:person:${linkedinId}`,
+      serviceRelationships: [
+        {
+          relationshipType: "OWNER",
+          identifier: "urn:li:userGeneratedContent",
+        },
+      ],
+    },
+  };
+  const assetsData = await axios.post(
+    "https://api.linkedin.com/v2/assets?action=registerUpload",
+    data,
+    {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+      },
+    }
+  );
+
+  const uploadUrl =
+    assetsData.data.value.uploadMechanism[
+      "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"
+    ].uploadUrl;
+  const asset = assetsData.data.value.asset;
+
+  const file = fs.readFileSync(imagePath);
+  const blob = Buffer.from(file);
+
+  await axios.post(uploadUrl, blob, {
+    headers: {
+      Authorization: `Bearer ${access_token}`,
+      "Content-Type": "application/octet-stream",
+    },
+  });
+
+  const uploadResponse = await axios.post(
+    "https://api.linkedin.com/v2/ugcPosts",
+    {
+      author: `urn:li:person:${linkedinId}`,
+      lifecycleState: "PUBLISHED",
+      specificContent: {
+        "com.linkedin.ugc.ShareContent": {
+          shareCommentary: {
+            text,
+          },
+          shareMediaCategory: "IMAGE",
+          media: [
+            {
+              status: "READY",
+              description: {
+                text: "Center stage!",
+              },
+              media: asset,
+              title: {
+                text: "LinkedIn Talent Connect 2021",
+              },
+            },
+          ],
+        },
+      },
+      visibility: {
+        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
+      },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+      },
+    }
+  );
+
+  return uploadResponse;
+};
+
+const simpleTextShare = async (text, access_token, linkedInId) => {
+  const shareResponse = await axios.post(
+    "https://api.linkedin.com/v2/ugcPosts",
+    {
+      author: `urn:li:person:${linkedInId}`,
+      lifecycleState: "PUBLISHED",
+      specificContent: {
+        "com.linkedin.ugc.ShareContent": {
+          shareCommentary: {
+            text,
+          },
+          shareMediaCategory: "NONE",
+        },
+      },
+      visibility: {
+        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
+      },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        "X-Restli-Protocol-Version": "2.0.0",
+        "Content-Type": "application/json",
+      },
+    }
+  );
+  return shareResponse;
+};
 module.exports = {
-  // getAuthorizationUrl,
   getAccessToken,
   getLinkedinProfile,
+  publishContent,
+  simpleTextShare,
 };

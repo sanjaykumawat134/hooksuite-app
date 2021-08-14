@@ -1,0 +1,16 @@
+project defination - Hootsuite
+
+user register / login  -- super user
+
+after login -
+		Add social network -
+			Twitter , facebook , instagram, linked in , youtube
+options - compose(a post),edit a post ,delete ,draft , file ,location.
+	 publish to selected account ,schedule - auto,custom(date-time), reschedule.
+	  stream (show feeds of different account in different tabs)
+	  push - notification on any changes.
+  
+technology: 
+node js (backend rest api)
+angular (front -end ui)
+database - mongodb.

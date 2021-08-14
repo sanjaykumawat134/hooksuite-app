@@ -1,7 +1,25 @@
 const express = require("express");
 
 const User = require("../models/User");
-const { getAccessToken, getLinkedinProfile } = require("../utils/linkedInApi");
+const multer = require("multer");
+var path = require("path");
+const auth = require("../middleware/auth");
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "uploads/");
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
+const upload = multer({ storage });
+const {
+  getAccessToken,
+  getLinkedinProfile,
+  publishContent,
+  simpleTextShare,
+} = require("../utils/linkedInApi");
 const linkedInRoutes = new express.Router();
 linkedInRoutes.get("/", async (req, res) => {
   try {
@@ -63,9 +81,8 @@ linkedInRoutes.post("/auth", async (req, res) => {
       });
       const userObj = await newUser.save();
       userObj.tokens = userObj.tokens.concat({ token });
-      const userObjWithToken = await userObj.save();
-      console.log(userObjWithToken);
-      return res.send({ userObjWithToken, msg: "sucessfully login" });
+      await userObj.save();
+      return res.send({ token, msg: "sucessfully login" });
     }
     //update existing one
     const updatedUser = await User.findByIdAndUpdate(userExists._id, {
@@ -73,17 +90,16 @@ linkedInRoutes.post("/auth", async (req, res) => {
       authProviders: "linkedIn",
     });
     updatedUser.tokens = updatedUser.tokens.concat({ token });
-    updatedUserWithToken = await updatedUser.save();
-    console.log(updatedUser);
-    return res.send({ updatedUser, msg: "sucessfully login" });
+    await updatedUser.save();
+    return res.send({ token, msg: "sucessfully login" });
   } catch (error) {
     console.log(error);
     res.status(400).send({ error });
   }
 });
-linkedInRoutes.get("/profile/:id", async (req, res) => {
+linkedInRoutes.get("/profile/", auth, async (req, res) => {
   try {
-    const _id = req.params.id;
+    const _id = req.user._id;
     if (!_id && _id === undefined) {
       return res.status(400).send({ error: "please enter valid id" });
     }
@@ -99,11 +115,56 @@ linkedInRoutes.get("/profile/:id", async (req, res) => {
   }
 });
 // share to linked in body required( accesstoken , userid , content )
-linkedInRoutes.post("/shares", async (req, res) => {
+linkedInRoutes.post(
+  "/shares",
+  auth,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const text = req.body.message;
+      const filePath = req.file.path;
+      const access_token = req.access_token;
+      const linkedInId = req.user.authProviderUserId;
+      const publishResponse = await publishContent(
+        access_token,
+        linkedInId,
+        filePath,
+        text
+      );
+      res.send(publishResponse.data);
+    } catch (error) {
+      console.log(error);
+      res.status(400).send(error);
+    }
+  }
+);
+linkedInRoutes.post("/simpleshare", auth, async (req, res) => {
   try {
-   
+    console.log(req.body.content);
+    // console.log(req);
+    const text = req.body.content;
+    console.log(text);
+    const access_token = req.access_token;
+    const linkedInId = req.user.authProviderUserId;
+    const shareResponse = await simpleTextShare(text, access_token, linkedInId);
+    console.log(shareResponse);
+    res.send(shareResponse.data);
   } catch (error) {
+    console.log(error);
     res.status(400).send(error);
+  }
+});
+linkedInRoutes.get("/logout", auth, async (req, res) => {
+  try {
+    req.user.tokens = [];
+    // console.log(index);
+    // req.user.tokens.splice(index, 1);
+    const user = await req.user.save();
+    console.log(user);
+    res.send(user);
+  } catch (error) {
+    console.log(error);
+    res.status(400).send({ error });
   }
 });
 module.exports = linkedInRoutes;

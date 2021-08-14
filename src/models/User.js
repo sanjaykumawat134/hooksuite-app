@@ -1,7 +1,7 @@
-const moongoose = require("mongoose");
+const mongoose = require("mongoose");
 const validator = require("validator");
 
-const userSchema = new moongoose.Schema(
+const userSchema = new mongoose.Schema(
   {
     authProviderUserId: {
       type: String,
@@ -44,9 +44,28 @@ const userSchema = new moongoose.Schema(
     },
     authProviders: {
       type: String,
-      unique: true,
       trim: true,
     },
+    accounts: [
+      {
+        account: {
+          type: mongoose.Types.ObjectId,
+          ref: "Account",
+        },
+      },
+    ],
+    post: [
+      {
+        post: {
+          type: mongoose.Types.ObjectId,
+          ref: "Post",
+          account: {
+            type: mongoose.Types.ObjectId,
+            ref: "Account",
+          },
+        },
+      },
+    ],
     tokens: [
       {
         token: {
@@ -67,5 +86,5 @@ userSchema.statics.findUsersByAuthProvider = async function (
   const user = await User.findOne({ email, authProviders });
   return user;
 };
-const User = moongoose.model("User", userSchema);
+const User = mongoose.model("User", userSchema);
 module.exports = User;
